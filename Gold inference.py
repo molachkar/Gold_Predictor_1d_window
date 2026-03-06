@@ -30,20 +30,26 @@ CALIB_FEATURES = ['oof_prediction', 'pred_z', 'abs_pred_z', 'Macro_Fast', 'Marke
 
 
 def fetch_data(start, end):
-    TICKER_MAP = {
-        'GC=F':     'Close_XAUUSD',
-        'EURUSD=X': 'Close_EURUSD',
-        'JPY=X':    'Close_USDJPY',
-        '^TNX':     'TNX_Raw',
-    }
-    raw = yf.download(list(TICKER_MAP.keys()), start=start, end=end,
-                      auto_adjust=True, progress=False)
-    if isinstance(raw.columns, pd.MultiIndex):
-        close_df = raw['Close'].rename(columns=TICKER_MAP)
-        volume   = raw['Volume']['GC=F'].rename('Volume')
-    else:
-        close_df = raw[['Close']].rename(columns={'Close': 'Close_XAUUSD'})
-        volume   = raw['Volume'].rename('Volume')
+    # Download each price ticker individually to avoid MultiIndex column misalignment
+    def dl_close(ticker, col_name):
+        raw = yf.download(ticker, start=start, end=end, auto_adjust=True, progress=False)
+        if isinstance(raw.columns, pd.MultiIndex):
+            raw.columns = raw.columns.get_level_values(0)
+        return raw[['Close']].rename(columns={'Close': col_name})
+
+    def dl_volume(ticker):
+        raw = yf.download(ticker, start=start, end=end, auto_adjust=True, progress=False)
+        if isinstance(raw.columns, pd.MultiIndex):
+            raw.columns = raw.columns.get_level_values(0)
+        return raw[['Volume']].rename(columns={'Volume': 'Volume'})
+
+    gold    = dl_close('GC=F',     'Close_XAUUSD')
+    eurusd  = dl_close('EURUSD=X', 'Close_EURUSD')
+    usdjpy  = dl_close('JPY=X',    'Close_USDJPY')
+    tnx     = dl_close('^TNX',     'TNX_Raw')
+    volume  = dl_volume('GC=F')[['Volume']]
+
+    close_df = gold.join(eurusd, how='left').join(usdjpy, how='left').join(tnx, how='left')
 
     fred  = Fred(api_key=FRED_API_KEY)
     macro = pd.DataFrame({s: fred.get_series(s, start, end) for s in MACRO_SERIES})
@@ -129,7 +135,6 @@ def run_inference(feature_df, base_model, calibrator, oof_history):
         [[oof_pred, pred_z, abs_pred_z, macro_fast, market_state_str]],
         columns=CALIB_FEATURES
     )
-    calib_input['Market_State'] = calib_input['Market_State'].astype(str)
     prob = float(calibrator.predict_proba(calib_input)[0][1])
 
     signal = "NO SIGNAL"
