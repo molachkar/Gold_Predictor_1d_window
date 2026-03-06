@@ -1,0 +1,669 @@
+1) Macro_Fast
+
+Purpose: capture monetary pressure from rates and real yields (both level and speed of change).
+
+Inputs
+
+DFII10 — 10-year real yield
+
+DFII5 — 5-year real yield
+
+DGS2 — 2-year Treasury yield
+
+FEDFUNDS — Federal Funds rate
+
+All series indexed daily. Missing macro releases should be forward-filled.
+
+Step 1 — Daily Change (rate acceleration)
+
+For each macro series 
+𝑥
+x:
+
+Δ
+𝑥
+𝑡
+=
+𝑥
+𝑡
+−
+𝑥
+𝑡
+−
+1
+Δx
+t
+	​
+
+=x
+t
+	​
+
+−x
+t−1
+	​
+
+
+Example:
+
+Δ
+𝐷
+𝐺
+𝑆
+2
+𝑡
+=
+𝐷
+𝐺
+𝑆
+2
+𝑡
+−
+𝐷
+𝐺
+𝑆
+2
+𝑡
+−
+1
+ΔDGS2
+t
+	​
+
+=DGS2
+t
+	​
+
+−DGS2
+t−1
+	​
+
+Step 2 — Past-only rolling normalization (window = 252 days)
+
+For each macro series:
+
+𝜇
+𝑥
+(
+𝑡
+)
+=
+𝑚
+𝑒
+𝑎
+𝑛
+(
+𝑥
+𝑡
+−
+252
+…
+𝑥
+𝑡
+−
+1
+)
+μ
+x
+	​
+
+(t)=mean(x
+t−252
+	​
+
+…x
+t−1
+	​
+
+)
+𝜎
+𝑥
+(
+𝑡
+)
+=
+𝑠
+𝑡
+𝑑
+(
+𝑥
+𝑡
+−
+252
+…
+𝑥
+𝑡
+−
+1
+)
+σ
+x
+	​
+
+(t)=std(x
+t−252
+	​
+
+…x
+t−1
+	​
+
+)
+
+For the change series:
+
+𝜇
+Δ
+𝑥
+(
+𝑡
+)
+=
+𝑚
+𝑒
+𝑎
+𝑛
+(
+Δ
+𝑥
+𝑡
+−
+252
+…
+Δ
+𝑥
+𝑡
+−
+1
+)
+μ
+Δx
+	​
+
+(t)=mean(Δx
+t−252
+	​
+
+…Δx
+t−1
+	​
+
+)
+𝜎
+Δ
+𝑥
+(
+𝑡
+)
+=
+𝑠
+𝑡
+𝑑
+(
+Δ
+𝑥
+𝑡
+−
+252
+…
+Δ
+𝑥
+𝑡
+−
+1
+)
+σ
+Δx
+	​
+
+(t)=std(Δx
+t−252
+	​
+
+…Δx
+t−1
+	​
+
+)
+
+Important: statistics only use past data (t−1 and earlier).
+
+Step 3 — Standardize with z-scores
+
+Level component:
+
+𝑧
+𝑙
+𝑒
+𝑣
+𝑒
+𝑙
+(
+𝑡
+)
+=
+𝑥
+𝑡
+−
+𝜇
+𝑥
+(
+𝑡
+)
+𝜎
+𝑥
+(
+𝑡
+)
+z
+level
+	​
+
+(t)=
+σ
+x
+	​
+
+(t)
+x
+t
+	​
+
+−μ
+x
+	​
+
+(t)
+	​
+
+
+Change component:
+
+𝑧
+𝑑
+𝑒
+𝑙
+𝑡
+𝑎
+(
+𝑡
+)
+=
+Δ
+𝑥
+𝑡
+−
+𝜇
+Δ
+𝑥
+(
+𝑡
+)
+𝜎
+Δ
+𝑥
+(
+𝑡
+)
+z
+delta
+	​
+
+(t)=
+σ
+Δx
+	​
+
+(t)
+Δx
+t
+	​
+
+−μ
+Δx
+	​
+
+(t)
+	​
+
+
+This produces 8 standardized components:
+
+DGS2_z
+
+DGS2_delta_z
+
+DFII10_z
+
+DFII10_delta_z
+
+DFII5_z
+
+DFII5_delta_z
+
+FEDFUNDS_z
+
+FEDFUNDS_delta_z
+
+Step 4 — Combine components
+
+Macro_Fast is the mean of all standardized components:
+
+𝑀
+𝑎
+𝑐
+𝑟
+𝑜
+𝐹
+𝑎
+𝑠
+𝑡
+𝑡
+=
+𝐷
+𝐺
+𝑆
+2
+𝑧
++
+𝐷
+𝐺
+𝑆
+2
+Δ
+𝑧
++
+𝐷
+𝐹
+𝐼
+𝐼
+10
+𝑧
++
+𝐷
+𝐹
+𝐼
+𝐼
+10
+Δ
+𝑧
++
+𝐷
+𝐹
+𝐼
+𝐼
+5
+𝑧
++
+𝐷
+𝐹
+𝐼
+𝐼
+5
+Δ
+𝑧
++
+𝐹
+𝐸
+𝐷
+𝐹
+𝑈
+𝑁
+𝐷
+𝑆
+𝑧
++
+𝐹
+𝐸
+𝐷
+𝐹
+𝑈
+𝑁
+𝐷
+𝑆
+Δ
+𝑧
+8
+MacroFast
+t
+	​
+
+=
+8
+DGS2
+z
+	​
+
++DGS2
+Δz
+	​
+
++DFII10
+z
+	​
+
++DFII10
+Δz
+	​
+
++DFII5
+z
+	​
+
++DFII5
+Δz
+	​
+
++FEDFUNDS
+z
+	​
+
++FEDFUNDS
+Δz
+	​
+
+	​
+
+Interpretation
+
+Positive Macro_Fast:
+
+rates high vs history
+
+rates rising fast
+
+monetary tightening pressure
+
+Negative Macro_Fast:
+
+rates low
+
+rates falling
+
+easing conditions
+
+Gold historically weakens when Macro_Fast is high.
+
+2) Market_State
+
+Purpose: classify overall market regime using trend and volatility.
+
+Inputs
+
+Close_XAUUSD (gold price)
+
+Close_Returns (daily returns)
+
+Derived indicators:
+
+EMA50
+
+EMA200
+
+Rolling volatility (20-day std of returns)
+
+Step 1 — Trend signal
+
+Compute exponential moving averages:
+
+𝐸
+𝑀
+𝐴
+50
+𝑡
+=
+𝐸
+𝑀
+𝐴
+(
+𝐶
+𝑙
+𝑜
+𝑠
+𝑒
+,
+50
+)
+EMA50
+t
+	​
+
+=EMA(Close,50)
+𝐸
+𝑀
+𝐴
+200
+𝑡
+=
+𝐸
+𝑀
+𝐴
+(
+𝐶
+𝑙
+𝑜
+𝑠
+𝑒
+,
+200
+)
+EMA200
+t
+	​
+
+=EMA(Close,200)
+
+Trend score:
+
+𝑇
+𝑟
+𝑒
+𝑛
+𝑑
+𝑡
+=
+𝐸
+𝑀
+𝐴
+50
+𝑡
+−
+𝐸
+𝑀
+𝐴
+200
+𝑡
+Trend
+t
+	​
+
+=EMA50
+t
+	​
+
+−EMA200
+t
+	​
+
+
+Interpretation:
+
+Trend > 0 → bullish trend
+Trend < 0 → bearish trend
+
+Step 2 — Volatility signal
+
+Compute rolling volatility:
+
+𝑉
+𝑜
+𝑙
+𝑡
+=
+𝑠
+𝑡
+𝑑
+(
+𝑅
+𝑒
+𝑡
+𝑢
+𝑟
+𝑛
+𝑠
+𝑡
+−
+20
+…
+𝑅
+𝑒
+𝑡
+𝑢
+𝑟
+𝑛
+𝑠
+𝑡
+−
+1
+)
+Vol
+t
+	​
+
+=std(Returns
+t−20
+	​
+
+…Returns
+t−1
+	​
+
+)
+Step 3 — Regime classification
+
+Market_State is discrete.
+
+Typical rule set:
+
+If:
+
+Trend_t > 0 AND Vol_t < median_vol
+
+→ Bull regime
+
+If:
+
+Trend_t < 0 AND Vol_t > median_vol
+
+→ Bear regime
+
+Else
+
+→ Neutral regime
+
+Encoded numerically:
+
+State	Meaning
+1	Bull
+0	Neutral
+-1	Bear
