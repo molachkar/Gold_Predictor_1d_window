@@ -4,3 +4,4 @@ yfinance
 fredapi
 streamlit
 scikit-learn
+altair
