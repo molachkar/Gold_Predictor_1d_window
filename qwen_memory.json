@@ -1,0 +1,14 @@
+{
+  "world_view": "The global macro regime remains one of 'higher for longer' real rates tempered by persistent structural deficits and geopolitical fragmentation, which continues to support gold as a strategic reserve asset. Central banks, particularly in emerging markets, are maintaining strong gold accumulation trends, while the Fed remains data-dependent but cautious amid sticky energy-driven inflation. Bitcoin's growing ETF-driven institutional adoption is not displacing gold but rather reinforcing demand for non-sovereign stores of value. Gold's role as a portfolio stabilizer is being reasserted even during equity rallies, suggesting a shift in market regime where both assets can rise in tandem under broad monetary skepticism.",
+  "runs": [
+    {
+      "date": "2026-03-17",
+      "signal": "NO SIGNAL",
+      "prob": 0.5688,
+      "outcome": "pending",
+      "world_view_note": "Bullish bias maintained above $5,000 with cautious range-bound outlook; key SMC levels in focus ahead of potential breakout."
+    }
+  ],
+  "created": "2026-03-17",
+  "last_run": "2026-03-17 01:54"
+}
