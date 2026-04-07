@@ -1,5 +1,5 @@
 {
-  "world_view": "The global macro regime remains one of 'higher for longer' real rates tempered by persistent structural deficits and geopolitical fragmentation, which continues to support gold as a strategic reserve asset. Central banks, particularly in emerging markets, are maintaining strong gold accumulation trends, while the Fed remains data-dependent but cautious amid sticky energy-driven inflation. Bitcoin's growing ETF-driven institutional adoption is not displacing gold but rather reinforcing demand for non-sovereign stores of value. Gold's role as a portfolio stabilizer is being reasserted even during equity rallies, suggesting a shift in market regime where both assets can rise in tandem under broad monetary skepticism.",
+  "world_view": "The global macro regime remains anchored in 'higher for longer' real interest rates, yet structural deficits and geopolitical risks are increasingly offsetting hawkish central bank rhetoric. Gold continues to gain strategic importance as both official institutions and private investors diversify away from sovereign currencies amid monetary skepticism. Bitcoin\u2019s institutional adoption via ETFs is not cannibalizing gold but instead validating the broader narrative of non-sovereign value storage, allowing both assets to coexist in portfolios. This dual-demand dynamic is reshaping gold's role\u2014not as a hedge solely against inflation or recession, but as a foundational asset in an era of fragmented monetary trust.",
   "runs": [
     {
       "date": "2026-03-17",
@@ -7,8 +7,15 @@
       "prob": 0.5688,
       "outcome": "pending",
       "world_view_note": "Bullish bias maintained above $5,000 with cautious range-bound outlook; key SMC levels in focus ahead of potential breakout."
+    },
+    {
+      "date": "2026-03-17",
+      "signal": "NO SIGNAL",
+      "prob": 0.5683,
+      "outcome": "pending",
+      "world_view_note": "Bullish bias maintained above $5,000 with cautious range-bound outlook; key SMC levels in focus ahead of potential breakout."
     }
   ],
   "created": "2026-03-17",
-  "last_run": "2026-03-17 01:54"
+  "last_run": "2026-03-17 02:05"
 }

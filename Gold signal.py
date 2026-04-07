@@ -1,4 +1,4 @@
-import os, pickle, warnings, time, requests
+import os, json, pickle, warnings, time, requests
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import yfinance as yf
 
 try:
-    from qwen_briefing import run_briefing, update_outcome, load_memory
+    from qwen_briefing import render_qwen_section
     QWEN_AVAILABLE = True
 except ImportError:
     QWEN_AVAILABLE = False
@@ -45,8 +45,8 @@ CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
 :root{
     --bg:#05070a;--surf:#0c0f14;--surf2:#111520;--border:#1c2030;
-    --border2:#252a38;--text:#e2e8f0;--muted:#3d4a5c;--muted2:#5a6a80;
-    --accent:#f5c842;--accent2:#e6a800;--buy:#10d988;--sell:#ff4d6a;
+    --text:#e2e8f0;--sub:#e2e8f0;
+    --accent:#f5c842;--buy:#10d988;--sell:#ff4d6a;--purple:#a78bfa;
     --mono:'JetBrains Mono',monospace;--sans:'Space Grotesk',sans-serif;
     --glow-buy:0 0 24px rgba(16,217,136,0.18);
     --glow-sell:0 0 24px rgba(255,77,106,0.18);
@@ -65,91 +65,63 @@ body{background:var(--bg)!important;}
     display:flex;align-items:center;justify-content:center;
     font-family:var(--mono);font-size:0.6rem;font-weight:700;color:#000;flex-shrink:0;}
 .logo-text{font-family:var(--mono);font-size:0.78rem;font-weight:600;letter-spacing:0.2em;color:var(--accent);text-transform:uppercase;}
-.logo-sub{font-family:var(--mono);font-size:0.56rem;color:var(--muted2);letter-spacing:0.12em;margin-top:2px;}
+.logo-sub{font-family:var(--mono);font-size:0.56rem;color:#e2e8f0;letter-spacing:0.12em;margin-top:2px;}
 .header-right{text-align:right;}
-.header-ts{font-family:var(--mono);font-size:0.58rem;color:var(--muted2);letter-spacing:0.08em;}
+.header-ts{font-family:var(--mono);font-size:0.58rem;color:#e2e8f0;letter-spacing:0.08em;}
 .header-status{font-family:var(--mono);font-size:0.56rem;letter-spacing:0.12em;margin-top:3px;}
-.section-label{font-family:var(--mono);font-size:0.56rem;letter-spacing:0.22em;
-    text-transform:uppercase;color:var(--muted2);padding:0 0 0.6rem;
-    border-bottom:1px solid var(--border);margin:1.8rem 0 1rem;}
-.kpi-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
-    background:var(--border);border:1px solid var(--border);border-radius:2px;overflow:hidden;margin-bottom:1px;}
-.kpi-strip-2{grid-template-columns:repeat(2,1fr);}
-.kpi-strip-3{grid-template-columns:repeat(3,1fr);}
-.kpi-cell{background:var(--surf);padding:1.1rem 1rem;}
-.kpi-lbl{font-family:var(--mono);font-size:0.52rem;color:var(--muted2);letter-spacing:0.14em;text-transform:uppercase;margin-bottom:0.4rem;}
-.kpi-val{font-family:var(--mono);font-size:1.1rem;font-weight:600;color:var(--text);}
-.kpi-val.gold{color:var(--accent);}
-.kpi-val.bull{color:var(--buy);}
-.kpi-val.bear{color:var(--sell);}
-.kpi-val.muted{color:var(--muted2);}
-.kpi-sub{font-family:var(--mono);font-size:0.52rem;color:var(--muted);margin-top:0.25rem;}
-.sig-banner{position:relative;border-radius:3px;overflow:hidden;margin:1.4rem 0;
-    padding:1.8rem 2rem 1.8rem 2.4rem;display:flex;align-items:center;
+.section-label{font-family:var(--mono);font-size:0.54rem;letter-spacing:0.24em;
+    text-transform:uppercase;color:#e2e8f0;padding:0 0 0.5rem;
+    border-bottom:1px solid var(--border);margin:1.6rem 0 0.9rem;}
+.sig-banner{position:relative;border-radius:6px;overflow:hidden;margin:1.2rem 0;
+    padding:1.6rem 2rem 1.6rem 2.4rem;display:flex;align-items:center;
     justify-content:space-between;background:var(--surf);}
 .sig-banner::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;}
-.sb-buy{border:1px solid rgba(16,217,136,0.3);box-shadow:var(--glow-buy);}
+.sb-buy{border:1px solid rgba(16,217,136,0.35);box-shadow:var(--glow-buy);}
 .sb-buy::before{background:var(--buy);}
-.sb-sell{border:1px solid rgba(255,77,106,0.3);box-shadow:var(--glow-sell);}
+.sb-sell{border:1px solid rgba(255,77,106,0.35);box-shadow:var(--glow-sell);}
 .sb-sell::before{background:var(--sell);}
-.sb-none{border:1px solid var(--border2);}
-.sb-none::before{background:var(--muted);}
+.sb-none{border:1px solid var(--border);}
+.sb-none::before{background:#e2e8f0;}
 .sig-label{font-family:var(--mono);font-size:2.6rem;font-weight:700;letter-spacing:0.04em;line-height:1;}
 .sb-buy .sig-label{color:var(--buy);text-shadow:0 0 30px rgba(16,217,136,0.5);}
 .sb-sell .sig-label{color:var(--sell);text-shadow:0 0 30px rgba(255,77,106,0.5);}
-.sb-none .sig-label{color:var(--muted2);}
-.sig-sub{font-family:var(--mono);font-size:0.6rem;color:var(--muted2);letter-spacing:0.12em;text-transform:uppercase;margin-top:0.5rem;}
+.sb-none .sig-label{color:#e2e8f0;}
+.sig-sub{font-family:var(--mono);font-size:0.58rem;color:#e2e8f0;letter-spacing:0.1em;text-transform:uppercase;margin-top:0.4rem;}
 .sig-right{text-align:right;}
 .sig-prob{font-family:var(--mono);font-size:1.4rem;font-weight:600;}
 .sb-buy .sig-prob{color:var(--buy);}
 .sb-sell .sig-prob{color:var(--sell);}
-.sb-none .sig-prob{color:var(--muted2);}
-.sig-prob-lbl{font-family:var(--mono);font-size:0.56rem;color:var(--muted2);letter-spacing:0.12em;text-transform:uppercase;margin-top:0.3rem;}
-.sig-reason{font-family:var(--mono);font-size:0.6rem;color:var(--muted2);line-height:1.9;margin-top:0.5rem;}
-.dtbl{background:var(--surf);border:1px solid var(--border);border-radius:2px;overflow:hidden;}
+.sb-none .sig-prob{color:#e2e8f0;}
+.sig-prob-lbl{font-family:var(--mono);font-size:0.52rem;color:#e2e8f0;letter-spacing:0.12em;text-transform:uppercase;margin-top:0.3rem;}
+.sig-reason{font-family:var(--mono);font-size:0.6rem;color:#e2e8f0;line-height:1.9;margin-top:0.4rem;}
+.dtbl{background:var(--surf);border:1px solid var(--border);border-radius:6px;overflow:hidden;}
 .dtbl-row{display:flex;justify-content:space-between;align-items:center;
-    padding:0.55rem 1.2rem;border-bottom:1px solid var(--border);}
+    padding:0.5rem 1.2rem;border-bottom:1px solid var(--border);}
 .dtbl-row:last-child{border-bottom:none;}
 .dtbl-row:hover{background:var(--surf2);}
-.dtbl-k{font-family:var(--mono);font-size:0.62rem;color:var(--muted2);letter-spacing:0.08em;}
-.dtbl-v{font-family:var(--mono);font-size:0.68rem;font-weight:500;color:var(--text);}
+.dtbl-k{font-family:var(--mono);font-size:0.6rem;color:#e2e8f0;letter-spacing:0.06em;}
+.dtbl-v{font-family:var(--mono);font-size:0.68rem;font-weight:500;color:#e2e8f0;}
 .dtbl-v.buy{color:var(--buy);}
 .dtbl-v.sell{color:var(--sell);}
 .dtbl-v.gold{color:var(--accent);}
-.dtbl-v.muted{color:var(--muted2);}
-.smc-row{display:grid;grid-template-columns:100px 90px 70px 1fr 36px 64px;
-    align-items:center;padding:6px 10px;border-radius:4px;margin-bottom:2px;}
-.smc-row:hover{background:var(--surf);}
-.smc-price{font-family:var(--mono);font-size:0.72rem;font-weight:500;color:var(--text);}
-.smc-tag{font-family:var(--mono);font-size:0.55rem;padding:2px 6px;border-radius:3px;border:1px solid;display:inline-block;letter-spacing:0.05em;}
-.smc-dir{font-family:var(--mono);font-size:0.58rem;color:var(--muted2);}
-.smc-zone{font-family:var(--mono);font-size:0.55rem;color:var(--muted);}
-.smc-hits{font-family:var(--mono);font-size:0.55rem;color:var(--muted2);text-align:center;}
-.smc-dist{font-family:var(--mono);font-size:0.65rem;font-weight:500;text-align:right;}
-.smc-cur{display:flex;align-items:center;gap:10px;margin:10px 0;padding:0 10px;}
-.smc-cur-line{flex:1;height:1px;background:var(--border2);}
-.smc-cur-price{font-family:var(--mono);font-size:1.1rem;font-weight:500;color:var(--text);}
-.smc-zone-hdr{font-family:var(--mono);font-size:0.5rem;letter-spacing:0.2em;color:var(--muted);padding:4px 10px 3px;}
-.smc-col-hdr{display:grid;grid-template-columns:100px 90px 70px 1fr 36px 64px;
-    padding:4px 10px 6px;font-family:var(--mono);font-size:0.5rem;letter-spacing:0.12em;color:var(--muted);border-bottom:1px solid var(--border);margin-bottom:4px;}
-.fresh-row{display:grid;grid-template-columns:140px 110px 60px 1fr;gap:0;
-    padding:6px 1.2rem;border-bottom:1px solid var(--border);}
-.fresh-row:last-child{border-bottom:none;}
-.fresh-row:hover{background:var(--surf2);}
-.fresh-k{font-family:var(--mono);font-size:0.6rem;color:var(--muted2);}
-.fresh-v{font-family:var(--mono);font-size:0.6rem;color:var(--text);}
-.fresh-status{font-family:var(--mono);font-size:0.6rem;}
-.candle-status{font-family:var(--mono);font-size:0.62rem;padding:10px 14px;
-    border-radius:3px;margin:0.6rem 0;}
-.cs-ok{background:rgba(16,217,136,0.06);border:1px solid rgba(16,217,136,0.2);color:var(--buy);}
-.cs-warn{background:rgba(245,200,66,0.06);border:1px solid rgba(245,200,66,0.2);color:var(--accent);}
-.cs-danger{background:rgba(255,77,106,0.06);border:1px solid rgba(255,77,106,0.2);color:var(--sell);}
+.dtbl-v.muted{color:#e2e8f0;}
+.candle-status{font-family:var(--mono);font-size:0.62rem;padding:9px 14px;border-radius:4px;margin:0.5rem 0;}
+.cs-ok{background:rgba(16,217,136,0.07);border:1px solid rgba(16,217,136,0.25);color:var(--buy);}
+.cs-warn{background:rgba(245,200,66,0.07);border:1px solid rgba(245,200,66,0.25);color:var(--accent);}
+.cs-danger{background:rgba(255,77,106,0.07);border:1px solid rgba(255,77,106,0.25);color:var(--sell);}
 .feat-table-wrap{overflow-x:auto;overflow-y:auto;max-height:420px;}
 .feat-table{border-collapse:collapse;font-family:var(--mono);font-size:0.58rem;width:100%;}
-.feat-table th{background:var(--bg);color:var(--muted2);padding:5px 8px;border-bottom:1px solid var(--border);letter-spacing:0.08em;white-space:nowrap;position:sticky;top:0;}
+.feat-table th{background:var(--bg);color:#e2e8f0;padding:5px 8px;border-bottom:1px solid var(--border);letter-spacing:0.08em;white-space:nowrap;position:sticky;top:0;}
 .feat-table td{padding:4px 8px;border-bottom:1px solid var(--border);color:var(--text);white-space:nowrap;}
 .feat-table tr:hover td{background:var(--surf2);}
 .feat-table tr.stats-row td{color:var(--accent);background:var(--surf);font-weight:500;}
+.ml-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;
+    background:var(--border);border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-top:6px;}
+.ml-card{background:var(--surf);padding:11px 12px 11px;}
+.ml-card:hover{background:var(--surf2);}
+.ml-card-title{font-family:var(--mono);font-size:0.5rem;font-weight:700;letter-spacing:0.14em;
+    text-transform:uppercase;color:#e2e8f0;margin-bottom:7px;}
+.ml-card-val{font-family:var(--mono);font-size:0.82rem;font-weight:600;line-height:1.4;}
 .stSpinner>div{border-top-color:var(--accent)!important;}
 [data-testid="stStatusWidget"]{display:none!important;}
 </style>
@@ -193,11 +165,27 @@ def dist(price, current):
 
 
 
-def _fetch_yf(ticker, start, end, retries=3):
+STOOQ_MAP = {"GC=F": "GC.F", "EURUSD=X": "EURUSD", "JPY=X": "JPYUSD"}
+
+def _fetch_stooq(ticker, start, end):
+    try:
+        import pandas_datareader as pdr
+        stooq_ticker = STOOQ_MAP.get(ticker, ticker)
+        df = pdr.DataReader(stooq_ticker, "stooq", start, end)
+        df.index = pd.to_datetime(df.index).tz_localize(None)
+        df = df.sort_index()
+        if not df.empty:
+            return df
+    except Exception:
+        pass
+    return pd.DataFrame()
+
+def _fetch_yf(ticker, start, end, retries=2):
     for i in range(retries):
         try:
             df = yf.download(ticker, start=start, end=end,
-                             auto_adjust=False, progress=False)
+                             auto_adjust=False, progress=False,
+                             timeout=15)
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
             df.index = pd.to_datetime(df.index).tz_localize(None)
@@ -205,14 +193,19 @@ def _fetch_yf(ticker, start, end, retries=3):
                 return df
         except Exception:
             if i < retries - 1:
-                time.sleep(1)
+                time.sleep(2)
+    # fallback to Stooq
+    df = _fetch_stooq(ticker, start, end)
+    if not df.empty:
+        return df
     return pd.DataFrame()
 
 
 def fetch_fred_data(start, end):
     fred_obj = Fred(api_key=FRED_API_KEY)
-    series, ages = {}, {}
+    series, ages, warnings_list = {}, {}, []
     for s in MACRO_SERIES:
+        data = None
         try:
             data = fred_obj.get_series(s, start, end)
             series[s] = data
@@ -224,20 +217,62 @@ def fetch_fred_data(start, end):
                 data = df[df.columns[0]].replace(".", np.nan).astype(float)
                 data = data[(data.index >= str(start)) & (data.index <= str(end))]
                 series[s] = data
+                warnings_list.append(f"{s}: loaded from local CSV")
             else:
-                raise FileNotFoundError(f"No data for {s}")
-        last = data.dropna().index[-1] if not data.dropna().empty else None
-        if last is not None:
+                warnings_list.append(f"{s}: unavailable — will ffill from last known value")
+                series[s] = pd.Series(dtype=float)
+        if data is not None and not data.dropna().empty:
+            last     = data.dropna().index[-1]
             bday_age = len(pd.bdate_range(start=last, end=pd.Timestamp.today().normalize())) - 1
             ages[s]  = (last.strftime("%Y-%m-%d"), bday_age)
         else:
-            ages[s] = ("unknown", 99)
+            ages[s] = ("unavailable", 99)
     macro = pd.DataFrame(series)
     macro.index = pd.to_datetime(macro.index).tz_localize(None)
-    return macro, ages
+    return macro, ages, warnings_list
+
+
+CACHE_FILE = os.path.join(ARTEFACT_DIR, "daily_cache.json")
+
+def _save_cache(df, fred_ages, fill_report, fetch_log, candle_note, fred_warnings):
+    today = datetime.today().strftime("%Y-%m-%d")
+    payload = {
+        "date":          today,
+        "df":            df.to_json(),
+        "fred_ages":     fred_ages,
+        "fill_report":   fill_report,
+        "fetch_log":     fetch_log,
+        "candle_note":   candle_note,
+        "fred_warnings": fred_warnings,
+    }
+    with open(CACHE_FILE, "w") as f:
+        json.dump(payload, f)
+
+def _load_cache():
+    if not os.path.exists(CACHE_FILE):
+        return None
+    try:
+        with open(CACHE_FILE, "r") as f:
+            payload = json.load(f)
+        today = datetime.today().strftime("%Y-%m-%d")
+        if payload.get("date") != today:
+            os.remove(CACHE_FILE)
+            return None
+        df = pd.read_json(payload["df"])
+        df.index = pd.to_datetime(df.index)
+        df.index.name = "Date"
+        return df, payload["fred_ages"], payload["fill_report"], payload["fetch_log"], payload["candle_note"], payload["fred_warnings"]
+    except Exception:
+        return None
 
 
 def fetch_all_daily():
+    cached = _load_cache()
+    if cached is not None:
+        df, fred_ages, fill_report, fetch_log, candle_note, fred_warnings = cached
+        fetch_log = {k: (v[0], "cached") for k, v in fetch_log.items()}
+        return df, fred_ages, fill_report, fetch_log, candle_note, fred_warnings
+
     end   = datetime.today()
     start = end - timedelta(days=DAYS_BACK)
     fetch_log = {}
@@ -249,7 +284,7 @@ def fetch_all_daily():
     fetch_log["EURUSD"] = ("yfinance EURUSD=X", "ok")
     jpy = _fetch_yf("JPY=X", start, end)
     fetch_log["USDJPY"] = ("yfinance JPY=X", "ok")
-    macro, fred_ages = fetch_fred_data(start, end)
+    macro, fred_ages, fred_warnings = fetch_fred_data(start, end)
     fetch_log["FRED"] = ("FRED API", "ok")
 
     prices = pd.DataFrame({
@@ -290,7 +325,8 @@ def fetch_all_daily():
 
     df.dropna(subset=["Close_XAUUSD"], inplace=True)
     df.index.name = "Date"
-    return df, fred_ages, fill_report, fetch_log, candle_note
+    _save_cache(df, fred_ages, fill_report, fetch_log, candle_note, fred_warnings)
+    return df, fred_ages, fill_report, fetch_log, candle_note, fred_warnings
 
 
 def engineer(df):
@@ -396,7 +432,11 @@ def weekly_range(feat_df):
 
 def intraday_range():
     try:
-        raw = yf.download("GC=F", start=datetime.today().strftime("%Y-%m-%d"),
+        now   = datetime.utcnow()
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        if start >= now:
+            start = start - timedelta(days=1)
+        raw = yf.download("GC=F", start=start, end=now,
                           interval="1h", auto_adjust=False, progress=False)
         if isinstance(raw.columns, pd.MultiIndex):
             raw.columns = raw.columns.get_level_values(0)
@@ -496,131 +536,10 @@ def smc_4h(current):
         return empty
 
 
-def _render_qwen(sig, r, current, w_high, w_low, i_high, i_low, deduped, raw_df):
+def _render_qwen(sig, r, current, w_high, w_low, i_high, i_low, deduped, raw_df, feat_df=None):
     if not QWEN_AVAILABLE:
         return
-
-    st.markdown(_section("QWEN3 MARKET BRIEFING"), unsafe_allow_html=True)
-    st.markdown("""
-    <style>
-    .qwen-card{background:#0c0f14;border:1px solid #1c2030;border-radius:6px;overflow:hidden;margin-bottom:12px;}
-    .qwen-card-hdr{padding:10px 14px 8px;border-bottom:1px solid #1c2030;font-family:'JetBrains Mono',monospace;font-size:0.58rem;letter-spacing:0.16em;text-transform:uppercase;}
-    .qwen-card-body{padding:12px 14px;font-family:'Space Grotesk',sans-serif;font-size:0.82rem;color:#9ca8b8;line-height:1.8;}
-    .qwen-trade{background:#0c0f14;border:1px solid rgba(16,217,136,0.25);border-radius:6px;padding:14px;margin-bottom:12px;}
-    .qwen-trade-hdr{font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:#10d988;letter-spacing:0.16em;margin-bottom:10px;}
-    .qwen-mem{background:#111520;border:1px solid #1c2030;border-radius:4px;padding:10px 14px;margin-bottom:12px;}
-    .qwen-mem-hdr{font-family:'JetBrains Mono',monospace;font-size:0.52rem;color:#3d4a5c;letter-spacing:0.14em;margin-bottom:6px;}
-    .qwen-mem-row{display:grid;grid-template-columns:90px 80px 56px 64px 1fr;font-family:'JetBrains Mono',monospace;font-size:0.56rem;color:#5a6a80;padding:3px 0;border-bottom:1px solid #1c2030;}
-    .qwen-mem-row:last-child{border-bottom:none;}
-    </style>
-    """, unsafe_allow_html=True)
-
-    memory    = load_memory()
-    past_runs = memory.get("runs", [])
-    if past_runs:
-        mem_rows = ""
-        for run in reversed(past_runs[-10:]):
-            oc     = run.get("outcome", "pending")
-            oc_col = "#10d988" if oc=="win" else "#ff4d6a" if oc=="loss" else "#3d4a5c"
-            sc_col = "var(--buy)" if run["signal"]=="BUY" else "var(--sell)" if run["signal"]=="SELL" else "var(--muted2)"
-            mem_rows += (f'<div class="qwen-mem-row">'
-                         f'<span>{run["date"]}</span>'
-                         f'<span style="color:{sc_col}">{run["signal"]}</span>'
-                         f'<span>{run["prob"]:.2f}</span>'
-                         f'<span style="color:{oc_col}">{oc}</span>'
-                         f'<span style="color:#3d4a5c">{run.get("world_view_note","")[:55]}</span>'
-                         f'</div>')
-        st.markdown(
-            f'<div class="qwen-mem"><div class="qwen-mem-hdr">MEMORY LOG — LAST 10 RUNS</div>'
-            f'<div class="qwen-mem-row" style="color:#252a38"><span>DATE</span><span>SIGNAL</span>'
-            f'<span>PROB</span><span>OUTCOME</span><span>NOTE</span></div>'
-            f'{mem_rows}</div>',
-            unsafe_allow_html=True)
-
-    if r and isinstance(r, dict):
-        payload = {
-            "signal":        sig,
-            "prob":          r.get("prob", 0),
-            "pred_z":        r.get("pred_z", 0),
-            "bull_trend":    r.get("bull_trend", 0),
-            "macro_fast":    r.get("macro_fast", 0),
-            "bb_pctb":       r.get("bb_pctb", 0),
-            "ema200":        r.get("ema200", 1),
-            "close":         current,
-            "weekly_high":   w_high,
-            "weekly_low":    w_low,
-            "intraday_high": i_high,
-            "intraday_low":  i_low,
-            "date":          str(raw_df.index[-1].date()),
-        }
-    else:
-        payload = {"signal":"NO SIGNAL","prob":0,"pred_z":0,"bull_trend":0,
-                   "macro_fast":0,"bb_pctb":0,"ema200":1,"close":current,
-                   "weekly_high":w_high,"weekly_low":w_low,
-                   "intraday_high":i_high,"intraday_low":i_low,
-                   "date":str(raw_df.index[-1].date())}
-
-    if st.button("RUN QWEN3 BRIEFING", use_container_width=True):
-        status = st.empty()
-
-        def cb(msg):
-            status.markdown(f'<div class="candle-status cs-warn">{msg}</div>',
-                            unsafe_allow_html=True)
-
-        result, _ = run_briefing(payload, deduped, cb)
-        status.empty()
-
-        if "error" in result:
-            st.markdown(f'<div class="candle-status cs-danger">Qwen error: {result["error"]}</div>',
-                        unsafe_allow_html=True)
-            return
-
-        cards = [
-            ("GLOBAL MARKET CONTEXT",  result.get("market_context",""),    "var(--accent)"),
-            ("FEATURE READING",        result.get("feature_reading",""),   "var(--muted2)"),
-            ("SMC STRUCTURE ANALYSIS", result.get("smc_analysis",""),      "var(--muted2)"),
-            ("ASSET CONNECTIONS",      result.get("asset_connections",""), "var(--muted2)"),
-            ("FORWARD OUTLOOK",        result.get("forward_outlook",""),   "#7F77DD"),
-        ]
-        for title, body, color in cards:
-            if body:
-                st.markdown(
-                    f'<div class="qwen-card">'
-                    f'<div class="qwen-card-hdr" style="color:{color}">{title}</div>'
-                    f'<div class="qwen-card-body">{body}</div>'
-                    f'</div>', unsafe_allow_html=True)
-
-        trade = result.get("trade_scenario")
-        if trade and isinstance(trade, dict) and trade.get("entry_zone"):
-            st.markdown(
-                f'<div class="qwen-trade">'
-                f'<div class="qwen-trade-hdr">TRADE SCENARIO  (prob >= 60%)</div>'
-                f'<div class="qwen-card-body">'
-                f'<b style="color:var(--text)">Entry zone:</b> {trade.get("entry_zone","")}<br><br>'
-                f'<b style="color:var(--text)">Reasoning:</b> {trade.get("reasoning","")}<br><br>'
-                f'<b style="color:var(--text)">What to watch:</b> {trade.get("what_to_watch","")}'
-                f'</div></div>', unsafe_allow_html=True)
-
-        wv = result.get("world_view_update","")
-        if wv:
-            st.markdown(
-                f'<div class="qwen-card">'
-                f'<div class="qwen-card-hdr" style="color:#534AB7">WORLD VIEW (saved to memory)</div>'
-                f'<div class="qwen-card-body">{wv}</div>'
-                f'</div>', unsafe_allow_html=True)
-
-    with st.expander("Update past signal outcome"):
-        c1, c2, c3 = st.columns([2,1,1])
-        with c1:
-            od = st.text_input("Date (YYYY-MM-DD)", value=str(raw_df.index[-1].date()))
-        with c2:
-            ov = st.selectbox("Outcome", ["win","loss"])
-        with c3:
-            st.write("")
-            st.write("")
-            if st.button("Save"):
-                update_outcome(od, ov)
-                st.success(f"Saved {ov} for {od}")
+    render_qwen_section(sig, r, current, w_high, w_low, i_high, i_low, deduped, raw_df, feat_df=feat_df)
 
 
 def main():
@@ -663,50 +582,41 @@ def main():
         <span style="color:var(--muted2)">FRED</span> &nbsp; DFII10/DFII5/DGS2 ready ~8:30 PM Morocco &nbsp;·&nbsp; FEDFUNDS changes on FOMC days only
         </div>""", unsafe_allow_html=True)
 
-    st.markdown(_section("FETCHING DATA"), unsafe_allow_html=True)
-    with st.spinner("Fetching all data sources..."):
-        raw_df, fred_ages, fill_report, fetch_log, candle_note = fetch_all_daily()
-
-    fetch_rows = "".join(_row(src, f"{method} &nbsp;<span style='color:var(--{'buy' if s=='ok' else 'accent' if s=='fallback' else 'muted2'})'>{s}</span>")
-                         for src, (method, s) in fetch_log.items())
-    if candle_note:
-        fetch_rows += _row("Candle", candle_note, "gold")
-    fetch_rows += _row("Last closed candle", str(raw_df.index[-1].date()), "gold")
-    st.markdown(f'<div class="dtbl">{fetch_rows}</div>', unsafe_allow_html=True)
-
-    st.markdown(_section("DATA FRESHNESS"), unsafe_allow_html=True)
-    gold_last = raw_df.index[-1]
-    gold_bday = len(pd.bdate_range(start=gold_last, end=pd.Timestamp.today().normalize())) - 1
-    fr_html   = '<div class="dtbl">'
-    fr_html  += f'<div class="fresh-row"><span class="fresh-k">XAU/USD</span><span class="fresh-v">{gold_last.date()}</span><span class="fresh-v">{gold_bday}bd</span><span class="fresh-status" style="color:var(--buy)">OK</span></div>'
-    for s, (d, age) in fred_ages.items():
-        if s == "FEDFUNDS":
-            note = "OK — only changes on FOMC days, current value is valid"
-            col  = "var(--buy)"
-        elif age <= 1:
-            note = "OK"
-            col  = "var(--buy)"
-        else:
-            note = f"OK — {age}bd old (weekend/holiday gap, normal)"
-            col  = "var(--buy)"
-        fr_html += f'<div class="fresh-row"><span class="fresh-k">{s}</span><span class="fresh-v">{d}</span><span class="fresh-v">{age}bd</span><span class="fresh-status" style="color:{col}">{note}</span></div>'
-    fr_html += '</div>'
-    st.markdown(fr_html, unsafe_allow_html=True)
-
-    if fill_report:
-        st.markdown(_section("FILL REPORT"), unsafe_allow_html=True)
-        fill_rows = "".join(
-            _row(col, f"{v['nan_filled']} NaN filled &nbsp;·&nbsp; max gap {v['max_gap_days']}d &nbsp;<span style='color:var(--muted2);font-size:0.55rem'>{'holiday/weekend — normal' if v['max_gap_days'] <= 3 else 'check source'}</span>", "muted")
-            for col, v in fill_report.items()
-        )
-        st.markdown(f'<div class="dtbl">{fill_rows}</div>', unsafe_allow_html=True)
-        st.markdown('<div style="font-family:var(--mono);font-size:0.55rem;color:var(--muted);padding:6px 0">NaN fills are expected. Gold does not trade on weekends or US holidays. Max gap of 1-3 days is always normal. Macro series (FRED) only update on business days.</div>', unsafe_allow_html=True)
-
-    st.markdown(_section("FEATURE ENGINEERING"), unsafe_allow_html=True)
-    with st.spinner("Engineering features..."):
+    # ── fetch all data silently ──────────────────────────────────────────
+    with st.spinner("Loading..."):
+        raw_df, fred_ages, fill_report, fetch_log, candle_note, fred_warnings = fetch_all_daily()
         feat_df = engineer(raw_df.copy())
-    st.markdown(f'<div class="dtbl">{_row("Rows", str(len(feat_df)))}{_row("Features", str(len(BASE_FEATURES)))}</div>', unsafe_allow_html=True)
 
+    if fred_warnings:
+        for w in fred_warnings:
+            st.markdown(f'<div class="candle-status cs-warn">FRED: {w}</div>', unsafe_allow_html=True)
+
+    is_cached  = all(s == "cached" for _, s in fetch_log.values())
+    cache_note = "Cached — data fetched today" if is_cached else "Fetched fresh"
+    cache_col  = "#10d988" if is_cached else "#e2e8f0"
+    candle_col = "#10d988" if "confirmed" in (candle_note or "") else "#f5c842"
+    candle_txt = candle_note or reason
+
+    st.markdown(f"""
+    <div style="background:#0c0f14;border:1px solid #1c2030;border-radius:6px;
+                overflow:hidden;margin:0.5rem 0;font-family:'JetBrains Mono',monospace;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:#1c2030;">
+        <div style="background:#0c0f14;padding:8px 14px;">
+          <div style="font-size:0.44rem;letter-spacing:0.18em;color:#e2e8f0;text-transform:uppercase;margin-bottom:3px">CANDLE</div>
+          <div style="font-size:0.68rem;font-weight:600;color:{candle_col}">{candle_txt}</div>
+        </div>
+        <div style="background:#0c0f14;padding:8px 14px;">
+          <div style="font-size:0.44rem;letter-spacing:0.18em;color:#e2e8f0;text-transform:uppercase;margin-bottom:3px">DATA</div>
+          <div style="font-size:0.68rem;font-weight:600;color:{cache_col}">{cache_note}</div>
+        </div>
+        <div style="background:#0c0f14;padding:8px 14px;">
+          <div style="font-size:0.44rem;letter-spacing:0.18em;color:#e2e8f0;text-transform:uppercase;margin-bottom:3px">RUN TIME</div>
+          <div style="font-size:0.68rem;font-weight:600;color:#e2e8f0">{mor.strftime('%H:%M')} Morocco</div>
+        </div>
+      </div>
+    </div>""", unsafe_allow_html=True)
+
+    # ── ML inference ────────────────────────────────────────────────────
     st.markdown(_section("ML INFERENCE"), unsafe_allow_html=True)
     try:
         r       = run_ml(feat_df)
@@ -739,105 +649,152 @@ def main():
           </div>
         </div>""", unsafe_allow_html=True)
 
-        rc = "muted" if bt_lbl=="NEUTRAL" else ("bull" if bt_lbl=="BULL" else "bear")
-        mc = "muted" if mf_lbl=="NEUTRAL" else ("sell" if mf_lbl=="TIGHT" else "bull")
-        rows = [
-            ("Close",         f"${r['close']:,.2f}",         "gold"),
-            ("Win prob",      f"{r['prob']:.4f}",             vc),
-            ("Pred Z-score",  f"{r['pred_z']:+.4f}",          "bull" if r["pred_z"]>0 else "bear"),
-            ("Pred value",    f"{r['pred_val']:+.8f}",        ""),
-            ("Bull Trend",    f"{r['bull_trend']:+.4f}  [{bt_lbl}]", rc),
-            ("Macro Fast",    f"{r['macro_fast']:+.4f}  [{mf_lbl}]", mc),
-            ("BB PctB",       f"{r['bb_pctb']:.4f}",          ""),
-            ("EMA200 ratio",  f"{r['ema200']:.4f}",            "bull" if r["ema200"]>1 else "bear"),
-            ("Prob gate",     f">= {PROB_THRESHOLD}",         "muted"),
-            ("Z gate",        f">= {Z_THRESHOLD}",            "muted"),
+        rc_col = "#5a6a80" if bt_lbl=="NEUTRAL" else ("#10d988" if bt_lbl=="BULL" else "#ff4d6a")
+        mc_col = "#5a6a80" if mf_lbl=="NEUTRAL" else ("#ff4d6a" if mf_lbl=="TIGHT" else "#10d988")
+        vc_col = "#10d988" if sig=="BUY" else "#ff4d6a" if sig=="SELL" else "#5a6a80"
+        pz_col = "#10d988" if r["pred_z"]>0 else "#ff4d6a"
+        e2_col = "#10d988" if r["ema200"]>1 else "#ff4d6a"
+
+        cards = [
+            ("Close",        f"${r['close']:,.2f}",                     "#f5c842"),
+            ("Win prob",     f"{r['prob']:.4f}",                         vc_col),
+            ("Pred Z",       f"{r['pred_z']:+.4f}",                      pz_col),
+            ("Pred value",   f"{r['pred_val']:+.6f}",                    "#e2e8f0"),
+            ("Bull Trend",   f"{r['bull_trend']:+.4f}<br><small style='font-size:0.55rem'>{bt_lbl}</small>", rc_col),
+            ("Macro Fast",   f"{r['macro_fast']:+.4f}<br><small style='font-size:0.55rem'>{mf_lbl}</small>", mc_col),
+            ("BB PctB",      f"{r['bb_pctb']:.4f}",                     "#e2e8f0"),
+            ("EMA200",       f"{r['ema200']:.4f}",                       e2_col),
+            ("Prob gate",    f"≥ {PROB_THRESHOLD}",                     "#378ADD"),
+            ("Z gate",       f"≥ {Z_THRESHOLD}",                        "#378ADD"),
         ]
-        st.markdown(f'<div class="dtbl">{"".join(_row(k,v,c) for k,v,c in rows)}</div>', unsafe_allow_html=True)
+
+        cards_html = '<div class="ml-grid">'
+        for title, value, col in cards:
+            cards_html += (f'<div class="ml-card">'
+                           f'<div class="ml-card-title">{title}</div>'
+                           f'<div class="ml-card-val" style="color:{col}">{value}</div>'
+                           f'</div>')
+        cards_html += '</div>'
+        st.markdown(cards_html, unsafe_allow_html=True)
 
     except FileNotFoundError as e:
-        st.markdown(f'<div class="candle-status cs-warn">Model files not found: {e} — showing data validation only</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="candle-status cs-warn">Model files not found: {e} — showing data only</div>', unsafe_allow_html=True)
         current = float(feat_df["Close_XAUUSD"].iloc[-1])
         sig     = "NO SIGNAL"
+        r       = None
 
-    st.markdown(_section("WEEKLY RANGE — LAST 7 CLOSED DAILY CANDLES"), unsafe_allow_html=True)
-    w_high, w_low, w_dates = weekly_range(feat_df)
-    w_mid = (w_high + w_low) / 2
-    pos   = "upper half — near weekly resistance" if current > w_mid else "lower half — near weekly support"
-    st.markdown(f"""
-    <div class="kpi-strip">
-      {_kpi("Weekly High",  f"${w_high:,.1f}", "bear", dist(w_high, current))}
-      {_kpi("Weekly Mid",   f"${w_mid:,.1f}",  "",     dist(w_mid,  current))}
-      {_kpi("Weekly Low",   f"${w_low:,.1f}",  "bull", dist(w_low,  current))}
-      {_kpi("Range",        f"${w_high-w_low:,.1f}", "muted")}
-    </div>""", unsafe_allow_html=True)
-    st.markdown(f'<div class="dtbl">{_row("Period", w_dates)}{_row("Position", pos)}</div>', unsafe_allow_html=True)
-
-    st.markdown(_section("INTRADAY RANGE — TODAY FROM 00:00"), unsafe_allow_html=True)
-    i_high, i_low, n_bars = intraday_range()
-    if i_high and i_low:
-        i_mid = (i_high + i_low) / 2
-        st.markdown(f"""
-        <div class="kpi-strip">
-          {_kpi("Intraday High", f"${i_high:,.1f}", "bear", dist(i_high, current))}
-          {_kpi("Intraday Mid",  f"${i_mid:,.1f}",  "",     dist(i_mid,  current))}
-          {_kpi("Intraday Low",  f"${i_low:,.1f}",  "bull", dist(i_low,  current))}
-          {_kpi("1H bars today", str(n_bars), "muted")}
-        </div>""", unsafe_allow_html=True)
-    else:
-        st.markdown(f'<div class="dtbl">{_row("Intraday", "No data yet — market not open")}</div>', unsafe_allow_html=True)
-
-    st.markdown(_section("4H SMC LEVELS"), unsafe_allow_html=True)
-    with st.spinner("Computing 4H SMC levels..."):
-        smc = smc_4h(current)
+    # ── market overview table (always fresh) ────────────────────────────
+    st.markdown(_section("MARKET OVERVIEW"), unsafe_allow_html=True)
+    with st.spinner("Computing levels..."):
+        smc    = smc_4h(current)
+        i_high, i_low, _ = intraday_range()
+        w_high, w_low, _ = weekly_range(feat_df)
 
     all_levels = []
     for ev in smc["bos_bull"]:
-        all_levels.append({"price": ev["price"], "type": "BOS", "dir": "Bull", "col": "#10d988", "zone": f"formed {ev['when']}", "hits": 1})
+        all_levels.append({"price": ev["price"], "type": "BOS",   "dir": "Bull", "col": "#10d988"})
     for ev in smc["choch_bull"]:
-        all_levels.append({"price": ev["price"], "type": "CHoCH", "dir": "Bull", "col": "#5DCAA5", "zone": f"formed {ev['when']}", "hits": 1})
+        all_levels.append({"price": ev["price"], "type": "CHoCH", "dir": "Bull", "col": "#5DCAA5"})
     for ob in smc["ob_bull"]:
-        all_levels.append({"price": ob["mid"], "type": "OB", "dir": "Bull", "col": "#10d988", "zone": f"${ob['bottom']:,.1f}–${ob['top']:,.1f}", "hits": 1})
+        all_levels.append({"price": ob["mid"],   "type": "OB",    "dir": "Bull", "col": "#10d988"})
     for ev in smc["bos_bear"]:
-        all_levels.append({"price": ev["price"], "type": "BOS", "dir": "Bear", "col": "#ff4d6a", "zone": f"formed {ev['when']}", "hits": 1})
+        all_levels.append({"price": ev["price"], "type": "BOS",   "dir": "Bear", "col": "#ff4d6a"})
     for ev in smc["choch_bear"]:
-        all_levels.append({"price": ev["price"], "type": "CHoCH", "dir": "Bear", "col": "#F0997B", "zone": f"formed {ev['when']}", "hits": 1})
+        all_levels.append({"price": ev["price"], "type": "CHoCH", "dir": "Bear", "col": "#F0997B"})
     for ob in smc["ob_bear"]:
-        all_levels.append({"price": ob["mid"], "type": "OB", "dir": "Bear", "col": "#ff4d6a", "zone": f"${ob['bottom']:,.1f}–${ob['top']:,.1f}", "hits": 1})
+        all_levels.append({"price": ob["mid"],   "type": "OB",    "dir": "Bear", "col": "#ff4d6a"})
     for sr in smc["sr"]:
-        all_levels.append({"price": sr["price"], "type": "S/R", "dir": "Neutral", "col": "#f5c842", "zone": "", "hits": sr["hits"]})
+        all_levels.append({"price": sr["price"], "type": "S/R",   "dir": "—",    "col": "#f5c842"})
 
     seen, deduped = [], []
     for lv in sorted(all_levels, key=lambda x: x["price"], reverse=True):
-        if not any(abs(lv["price"]-s)/lv["price"] < SR_TOL*2 for s in seen):
+        if not any(abs(lv["price"] - s) / lv["price"] < SR_TOL * 2 for s in seen):
             seen.append(lv["price"]); deduped.append(lv)
 
-    resistance = sorted([l for l in deduped if l["price"] > current], key=lambda x: x["price"])
-    support    = sorted([l for l in deduped if l["price"] < current], key=lambda x: x["price"], reverse=True)
+    # add weekly/daily range levels into the pool
+    range_levels = []
+    range_levels.append({"price": w_high, "type": "W.Res", "dir": "Weekly", "col": "#e2e8f0"})
+    range_levels.append({"price": w_low,  "type": "W.Sup", "dir": "Weekly", "col": "#e2e8f0"})
+    if i_high and i_low:
+        range_levels.append({"price": i_high, "type": "D.Res", "dir": "Daily", "col": "#a78bfa"})
+        range_levels.append({"price": i_low,  "type": "D.Sup", "dir": "Daily", "col": "#a78bfa"})
 
-    def smc_row(lv):
-        dc  = "#ff4d6a" if lv["price"] > current else "#10d988"
-        hits_s = f"{lv['hits']}x" if lv["hits"] > 1 else ""
-        return (f'<div class="smc-row" style="background:{lv["col"]}08">'
-                f'<span class="smc-price">${lv["price"]:,.1f}</span>'
-                f'<span class="smc-tag" style="color:{lv["col"]};border-color:{lv["col"]}40">{lv["type"]}</span>'
-                f'<span class="smc-dir" style="color:{lv["col"]}">{lv["dir"]}</span>'
-                f'<span class="smc-zone">{lv["zone"]}</span>'
-                f'<span class="smc-hits">{hits_s}</span>'
-                f'<span class="smc-dist" style="color:{dc}">{dist(lv["price"],current)}</span>'
-                f'</div>')
+    # merge all levels, sort by price descending
+    all_merged = sorted(deduped + range_levels, key=lambda x: x["price"], reverse=True)
 
-    smc_html = (f'<div class="smc-col-hdr"><span>PRICE</span><span>TYPE</span><span>DIR</span>'
-                f'<span>ZONE / FORMED</span><span>HITS</span><span style="text-align:right">DIST</span></div>')
-    smc_html += '<div class="smc-zone-hdr">RESISTANCE</div>'
-    smc_html += "".join(smc_row(l) for l in resistance[:8])
-    smc_html += (f'<div class="smc-cur"><div class="smc-cur-line"></div>'
-                 f'<div><div class="smc-cur-price">${current:,.1f}</div>'
-                 f'<div style="font-family:var(--mono);font-size:0.5rem;color:var(--muted2);margin-top:1px">CURRENT &nbsp;·&nbsp; ML: <span style="color:var(--{"buy" if sig=="BUY" else "sell" if sig=="SELL" else "muted2"})">{sig}</span></div></div>'
-                 f'<div class="smc-cur-line"></div></div>')
-    smc_html += '<div class="smc-zone-hdr">SUPPORT</div>'
-    smc_html += "".join(smc_row(l) for l in support[:8])
-    st.markdown(smc_html, unsafe_allow_html=True)
+    # data status
+    xau_status  = fetch_log.get("XAU/USD", ("", ""))[1]
+    fred_status = "OK" if all(age <= 1 or s == "FEDFUNDS" for s, (d, age) in fred_ages.items()) else "check"
+    xau_col     = "#10d988" if xau_status in ("ok","cached") else "#f5c842"
+    fred_col    = "#10d988" if fred_status == "OK" else "#f5c842"
+
+    sig_col = "#10d988" if sig=="BUY" else "#ff4d6a" if sig=="SELL" else "#e2e8f0"
+
+    # build all rows as one string then render once
+    all_dists = [abs(lv["price"] - current) for lv in all_merged]
+    max_dist  = max(all_dists) if all_dists else 1
+
+    above = sorted([l for l in all_merged if l["price"] > current], key=lambda x: x["price"])
+    below = sorted([l for l in all_merged if l["price"] < current], key=lambda x: x["price"], reverse=True)
+
+    def _ov_row(lv):
+        price = lv["price"]
+        col   = lv["col"]
+        d_pct = (price - current) / current * 100
+        d_col = "#ff4d6a" if price > current else "#10d988"
+        bar_w = min(int(abs(price - current) / max_dist * 100), 100)
+        mono  = "'JetBrains Mono',monospace"
+        return (
+            f'<div style="display:flex;align-items:center;padding:6px 16px;'
+            f'border-bottom:1px solid #1c2030;gap:0">'
+            f'<span style="font-family:{mono};font-size:0.74rem;font-weight:600;'
+            f'color:{col};width:96px;flex-shrink:0">${price:,.1f}</span>'
+            f'<span style="font-family:{mono};font-size:0.48rem;width:96px;flex-shrink:0;'
+            f'padding:2px 6px;border-radius:3px;border:1px solid {col}44;color:{col};'
+            f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+            f'{lv["type"]} {lv["dir"]}</span>'
+            f'<div style="flex:1;height:3px;background:#1a2030;border-radius:2px;overflow:hidden;margin:0 12px">'
+            f'<div style="width:{bar_w}%;height:100%;background:{col};border-radius:2px;opacity:0.85"></div></div>'
+            f'<span style="font-family:{mono};font-size:0.58rem;'
+            f'color:{d_col};width:56px;text-align:right;flex-shrink:0">{d_pct:+.2f}%</span>'
+            f'</div>'
+        )
+
+    cur_divider = (
+        f'<div style="background:#05070a;border-top:1px solid #1c2030;'
+        f'border-bottom:1px solid #1c2030;padding:9px 16px;'
+        f'display:flex;align-items:baseline;gap:10px">'
+        f'<span style="font-family:\'JetBrains Mono\',monospace;font-size:1rem;'
+        f'font-weight:700;color:#e2e8f0">${current:,.1f}</span>'
+        f'<span style="font-family:\'JetBrains Mono\',monospace;font-size:0.44rem;'
+        f'letter-spacing:0.18em;color:#e2e8f0">CURRENT</span>'
+        f'</div>'
+    )
+
+    ov_html = (
+        f'<div style="background:#0c0f14;border:1px solid #1c2030;border-radius:6px;overflow:hidden;margin-top:4px">'
+        # status bar
+        f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#1c2030">'
+        f'<div style="background:#0c0f14;padding:9px 14px">'
+        f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.44rem;letter-spacing:0.18em;color:#e2e8f0;text-transform:uppercase;margin-bottom:3px">XAU/USD</div>'
+        f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.72rem;font-weight:600;color:{xau_col}">{xau_status}</div></div>'
+        f'<div style="background:#0c0f14;padding:9px 14px">'
+        f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.44rem;letter-spacing:0.18em;color:#e2e8f0;text-transform:uppercase;margin-bottom:3px">FRED</div>'
+        f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.72rem;font-weight:600;color:{fred_col}">{fred_status}</div></div>'
+        f'<div style="background:#0c0f14;padding:9px 14px">'
+        f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.44rem;letter-spacing:0.18em;color:#e2e8f0;text-transform:uppercase;margin-bottom:3px">SIGNAL</div>'
+        f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.72rem;font-weight:600;color:{sig_col}">{sig}</div></div>'
+        f'<div style="background:#0c0f14;padding:9px 14px">'
+        f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.44rem;letter-spacing:0.18em;color:#e2e8f0;text-transform:uppercase;margin-bottom:3px">CANDLE</div>'
+        f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.72rem;font-weight:600;color:#e2e8f0">{str(raw_df.index[-1].date())}</div></div>'
+        f'</div>'
+        # levels
+        + "".join(_ov_row(l) for l in above)
+        + cur_divider
+        + "".join(_ov_row(l) for l in below)
+        + f'</div>'
+    )
+    st.markdown(ov_html, unsafe_allow_html=True)
 
     st.markdown(_section("FEATURE TABLE — LAST 252 ROWS"), unsafe_allow_html=True)
     tail  = feat_df[["Close_XAUUSD"] + BASE_FEATURES].tail(PRED_Z_LOOKBACK).copy()
@@ -864,7 +821,7 @@ def main():
 
     _render_qwen(sig, r if "r" in dir() else None,
                  current, w_high, w_low, i_high, i_low,
-                 deduped, raw_df)
+                 deduped, raw_df, feat_df=feat_df)
 
 
 if __name__ == "__main__":

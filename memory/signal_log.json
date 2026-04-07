@@ -1,0 +1,72 @@
+[
+  {
+    "date": "2026-03-18",
+    "signal": "BUY",
+    "prob": 0.5893,
+    "outcome": "pending",
+    "note": "Model strong buy, prob just under 0.60 gate but pred_z high; SMC supports entry at BOS bounce."
+  },
+  {
+    "date": "2026-03-18",
+    "signal": "BUY",
+    "prob": 0.5906,
+    "outcome": "pending",
+    "note": "Model buy signal at high z-score, just below prob threshold; SMC confirms BOS bounce\u2014monitor Fed for confirmation."
+  },
+  {
+    "date": "2026-03-19",
+    "signal": "BUY",
+    "prob": 0.6269,
+    "outcome": "pending",
+    "note": "Model crosses 0.60 gate\u2014trade active after two near-misses yesterday; Fed dovishness confirmed, positioning for CHoCH."
+  },
+  {
+    "date": "2026-03-19",
+    "signal": "BUY",
+    "prob": 0.6294,
+    "outcome": "pending",
+    "note": "Model clears 0.60 gate\u2014trade active; positioning for CHoCH at $5,102.9 with macro tailwinds."
+  },
+  {
+    "date": "2026-03-19",
+    "signal": "BUY",
+    "prob": 0.6285,
+    "outcome": "pending",
+    "note": "Model cleared 0.60 gate\u2014trade active; positioning for CHoCH at $5,102.9 with macro tailwinds."
+  },
+  {
+    "date": "2026-03-19",
+    "signal": "BUY",
+    "prob": 0.6285,
+    "outcome": "pending",
+    "note": "Model cleared 0.60 gate\u2014trade active; positioning for CHoCH at $5,102.9 with macro tailwinds."
+  },
+  {
+    "date": "2026-03-19",
+    "signal": "BUY",
+    "prob": 0.6285,
+    "outcome": "pending",
+    "note": "Model clears 0.60 gate with strong pred_z; trade active, positioning for CHoCH at $5,102.9."
+  },
+  {
+    "date": "2026-03-19",
+    "signal": "BUY",
+    "prob": 0.6285,
+    "outcome": "pending",
+    "note": "Model clears 0.60 gate with strong pred_z; trade active, positioning for CHoCH at $5,102.9."
+  },
+  {
+    "date": "2026-03-19",
+    "signal": "BUY",
+    "prob": 0.6285,
+    "outcome": "pending",
+    "note": "Trade active: BUY at $4,651.90, prob=0.628, pred_z=+1.01\u2014positioning for CHoCH at $5,102.9 with macro tailwinds."
+  },
+  {
+    "date": "2026-04-03",
+    "signal": "NO SIGNAL",
+    "prob": 0.5911,
+    "outcome": "pending",
+    "note": "No trade: prob=0.5911 just below 0.60 activation; monitor $4,935\u2013$5,057 as confirmation zone."
+  }
+]
